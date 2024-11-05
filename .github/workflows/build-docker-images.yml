@@ -8,20 +8,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  debug-trigger:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJSON(github) }}
-        run: echo "$GITHUB_CONTEXT"
-      
-      - name: Debug Info
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Branch name: ${{ github.ref }}"
-          echo "Repository: ${{ github.repository }}"
-
   build-api:
     name: Build API Image
     runs-on: ubuntu-latest
@@ -47,6 +33,7 @@ jobs:
           tags: |
             type=raw,latest
             type=ref,event=pr
+            type=ref,event=branch,prefix=branch-
             type=sha
 
       - name: Build and push Docker image
@@ -55,8 +42,12 @@ jobs:
           context: .
           file: ./apps/api/Dockerfile
           push: true
+          cache-from: type=registry,ref=trieve/buildcache:firecrawl
+          cache-to: type=registry,ref=trieve/buildcache:firecrawl,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PORT=8080
 
   build-puppeteer:
     name: Build Puppeteer Service
@@ -83,6 +74,7 @@ jobs:
           tags: |
             type=raw,latest
             type=ref,event=pr
+            type=ref,event=branch,prefix=branch-
             type=sha
 
       - name: Build and push Docker image
@@ -91,5 +83,9 @@ jobs:
           context: .
           file: ./apps/puppeteer-service-ts/Dockerfile
           push: true
+          cache-from: type=registry,ref=trieve/buildcache:puppeteer-service
+          cache-to: type=registry,ref=trieve/buildcache:puppeteer-service,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PORT=3000
