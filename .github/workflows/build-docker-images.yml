@@ -9,6 +9,14 @@ on:
     paths:
       - 'apps/api/**'
       - 'apps/puppeteer-service-ts/**'
+
+  push:
+    branches:
+      - 'test'
+    paths:
+      - 'apps/api/**'
+      - 'apps/puppeteer-service-ts/**'
+      
   workflow_dispatch:
 
 jobs:
