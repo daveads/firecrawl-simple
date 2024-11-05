@@ -1,4 +1,4 @@
-name: Build Docker Images
+name: Build Docker Images d
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
@@ -16,7 +16,7 @@ on:
     paths:
       - 'apps/api/**'
       - 'apps/puppeteer-service-ts/**'
-      
+
   workflow_dispatch:
 
 jobs:
