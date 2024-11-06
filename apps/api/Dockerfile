@@ -1,50 +1,48 @@
-FROM node:18-slim
+FROM node:20-slim AS base
 
-# Install system dependencies for Playwright
-RUN apt-get update && \
-    apt-get install -y wget gnupg && \
-    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
-    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
-    apt-get update && \
-    apt-get install -y \
-    google-chrome-stable \
-    fonts-ipafont-gothic \
-    fonts-wqy-zenhei \
-    fonts-thai-tlwg \
-    fonts-kacst \
-    fonts-symbola \
-    fonts-noto \
-    fonts-freefont-ttf \
-    --no-install-recommends && \
-    rm -rf /var/lib/apt/lists/*
+# Create app directory
+WORKDIR /app
 
-WORKDIR /usr/src/app
-
-# Install pnpm globally
+# Install pnpm
 RUN npm install -g pnpm
 
-# First copy only package files to leverage Docker caching
-COPY package.json pnpm-lock.yaml ./
-COPY apps/puppeteer-service-ts/package.json ./apps/puppeteer-service-ts/
+# Copy package files 
+COPY apps/api/package.json apps/api/pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Copy the rest of the application
-COPY . .
+# Install necessary build dependencies
+RUN apt-get update -qq && \
+    apt-get install -y \
+    ca-certificates \
+    git \
+    golang-go \
+    && update-ca-certificates
 
-# Install Playwright with dependencies
-RUN npx playwright install --with-deps chromium
+# Copy the rest of the application
+COPY apps/api ./
+
+# Build Go module
+COPY apps/api/src/lib/go-html-to-md ./src/lib/go-html-to-md
+RUN cd src/lib/go-html-to-md && \
+    go mod tidy && \
+    go build -o html-to-markdown.so -buildmode=c-shared html-to-markdown.go && \
+    chmod +x html-to-markdown.so
 
 # Build the application
 RUN pnpm run build
 
-# Set up environment
-ARG PORT=3000
-ENV PORT=${PORT}
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/app/ms-playwright
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Install runtime dependencies
+RUN apt-get install --no-install-recommends -y \
+    chromium \
+    chromium-sandbox \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives
 
+# Environment setup
+ENV PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
+ARG PORT=8080
+ENV PORT=${PORT}
 EXPOSE ${PORT}
 
-CMD [ "pnpm", "start" ]
+CMD ["pnpm", "start"]

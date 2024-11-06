@@ -18,20 +18,19 @@ RUN apt-get update && \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /usr/src/app
+WORKDIR /app
 
 # Install pnpm globally
 RUN npm install -g pnpm
 
-# First copy only package files to leverage Docker caching
-COPY package.json pnpm-lock.yaml ./
-COPY apps/puppeteer-service-ts/package.json ./apps/puppeteer-service-ts/
+# Copy package files
+COPY apps/puppeteer-service-ts/package.json apps/puppeteer-service-ts/pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application
-COPY . .
+COPY apps/puppeteer-service-ts .
 
 # Install Playwright with dependencies
 RUN npx playwright install --with-deps chromium
@@ -42,9 +41,9 @@ RUN pnpm run build
 # Set up environment
 ARG PORT=3000
 ENV PORT=${PORT}
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/app/ms-playwright
+ENV PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 EXPOSE ${PORT}
 
-CMD [ "pnpm", "start" ]
+CMD ["pnpm", "start"]
