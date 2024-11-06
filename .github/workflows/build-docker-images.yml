@@ -42,8 +42,6 @@ jobs:
           context: .
           file: ./apps/api/Dockerfile
           push: true
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:firecrawl
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:firecrawl,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -83,8 +81,6 @@ jobs:
           context: .
           file: ./apps/puppeteer-service-ts/Dockerfile
           push: true
-          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:puppeteer-service
-          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:puppeteer-service,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
