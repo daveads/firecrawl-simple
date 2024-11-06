@@ -1,48 +1,39 @@
 FROM node:20-slim AS base
-
-# Create app directory
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+LABEL fly_launch_runtime="Node.js"
+RUN corepack enable
+COPY . /app
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
+FROM base AS prod-deps
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
 
-# Copy package files 
-COPY apps/api/package.json apps/api/pnpm-lock.yaml ./
+FROM base AS build
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN apt-get update -qq && apt-get install -y ca-certificates && update-ca-certificates
+RUN pnpm install
+RUN bash -c 'pnpm run build'
 
-# Install necessary build dependencies
-RUN apt-get update -qq && \
-    apt-get install -y \
-    ca-certificates \
-    git \
-    golang-go \
-    && update-ca-certificates
+# Install Go
+FROM golang:1.19 AS go-base
+COPY src/lib/go-html-to-md /app/src/lib/go-html-to-md
 
-# Copy the rest of the application
-COPY apps/api ./
-
-# Build Go module
-COPY apps/api/src/lib/go-html-to-md ./src/lib/go-html-to-md
-RUN cd src/lib/go-html-to-md && \
+# Install Go dependencies and build parser lib
+RUN cd /app/src/lib/go-html-to-md && \
     go mod tidy && \
     go build -o html-to-markdown.so -buildmode=c-shared html-to-markdown.go && \
     chmod +x html-to-markdown.so
 
-# Build the application
-RUN pnpm run build
+FROM base
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y chromium chromium-sandbox && \
+    rm -rf /var/lib/apt/lists /var/cache/apt/archives
+COPY --from=prod-deps /app/node_modules /app/node_modules
+COPY --from=build /app /app
+COPY --from=go-base /app/src/lib/go-html-to-md/html-to-markdown.so /app/dist/src/lib/go-html-to-md/html-to-markdown.so
 
-# Install runtime dependencies
-RUN apt-get install --no-install-recommends -y \
-    chromium \
-    chromium-sandbox \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives
-
-# Environment setup
+# Start the server by default, this can be overwritten at runtime
+EXPOSE 8080
 ENV PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
-ARG PORT=8080
-ENV PORT=${PORT}
-EXPOSE ${PORT}
-
-CMD ["pnpm", "start"]
