@@ -1,39 +1,50 @@
-FROM node:20-slim AS base
-ENV PNPM_HOME="/pnpm"
-ENV PATH="$PNPM_HOME:$PATH"
-LABEL fly_launch_runtime="Node.js"
-RUN corepack enable
-COPY . /app
-WORKDIR /app
+FROM node:18-slim
 
-FROM base AS prod-deps
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --prod --frozen-lockfile
+# Install system dependencies for Playwright
+RUN apt-get update && \
+    apt-get install -y wget gnupg && \
+    wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list && \
+    apt-get update && \
+    apt-get install -y \
+    google-chrome-stable \
+    fonts-ipafont-gothic \
+    fonts-wqy-zenhei \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-symbola \
+    fonts-noto \
+    fonts-freefont-ttf \
+    --no-install-recommends && \
+    rm -rf /var/lib/apt/lists/*
 
-FROM base AS build
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+WORKDIR /usr/src/app
 
-RUN apt-get update -qq && apt-get install -y ca-certificates && update-ca-certificates
-RUN pnpm install
-RUN bash -c 'pnpm run build'
+# Install pnpm globally
+RUN npm install -g pnpm
 
-# Install Go
-FROM golang:1.19 AS go-base
-COPY src/lib/go-html-to-md /app/src/lib/go-html-to-md
+# First copy only package files to leverage Docker caching
+COPY package.json pnpm-lock.yaml ./
+COPY apps/puppeteer-service-ts/package.json ./apps/puppeteer-service-ts/
 
-# Install Go dependencies and build parser lib
-RUN cd /app/src/lib/go-html-to-md && \
-    go mod tidy && \
-    go build -o html-to-markdown.so -buildmode=c-shared html-to-markdown.go && \
-    chmod +x html-to-markdown.so
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
-FROM base
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y chromium chromium-sandbox && \
-    rm -rf /var/lib/apt/lists /var/cache/apt/archives
-COPY --from=prod-deps /app/node_modules /app/node_modules
-COPY --from=build /app /app
-COPY --from=go-base /app/src/lib/go-html-to-md/html-to-markdown.so /app/dist/src/lib/go-html-to-md/html-to-markdown.so
+# Copy the rest of the application
+COPY . .
 
-# Start the server by default, this can be overwritten at runtime
-EXPOSE 8080
-ENV PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium"
+# Install Playwright with dependencies
+RUN npx playwright install --with-deps chromium
+
+# Build the application
+RUN pnpm run build
+
+# Set up environment
+ARG PORT=3000
+ENV PORT=${PORT}
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/app/ms-playwright
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
+EXPOSE ${PORT}
+
+CMD [ "pnpm", "start" ]
