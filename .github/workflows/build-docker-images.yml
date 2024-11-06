@@ -1,4 +1,14 @@
-build-api:
+name: Build Docker Images
+
+on:
+  push:
+    branches:
+      - 'test'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-api:
     name: Build API Image
     runs-on: ubuntu-latest
     steps:
@@ -40,3 +50,44 @@ build-api:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PORT=8080
+
+  build-puppeteer:
+    name: Build Puppeteer Service
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v4
+
+      - name: Setup buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            trieve/puppeteer-service-ts
+          tags: |
+            type=raw,latest
+            type=ref,event=pr
+            type=ref,event=branch,prefix=branch-
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./apps/puppeteer-service-ts/Dockerfile
+          push: true
+          cache-from: type=registry,ref=trieve/buildcache:puppeteer-service
+          cache-to: type=registry,ref=trieve/buildcache:puppeteer-service,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PORT=3000
