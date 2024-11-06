@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout the repo
         uses: actions/checkout@v4
-        with:
-          submodules: 'recursive'  # In case go-html-to-md is a submodule
 
       - name: Setup buildx
         uses: docker/setup-buildx-action@v3
@@ -31,7 +29,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            trieve/firecrawl
+            ${{ secrets.DOCKER_USERNAME }}/firecrawl
           tags: |
             type=raw,latest
             type=ref,event=pr
@@ -44,8 +42,8 @@ jobs:
           context: .
           file: ./apps/api/Dockerfile
           push: true
-          cache-from: type=registry,ref=trieve/buildcache:firecrawl
-          cache-to: type=registry,ref=trieve/buildcache:firecrawl,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:firecrawl
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:firecrawl,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -72,7 +70,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            trieve/puppeteer-service-ts
+            ${{ secrets.DOCKER_USERNAME }}/puppeteer-service-ts
           tags: |
             type=raw,latest
             type=ref,event=pr
@@ -85,8 +83,8 @@ jobs:
           context: .
           file: ./apps/puppeteer-service-ts/Dockerfile
           push: true
-          cache-from: type=registry,ref=trieve/buildcache:puppeteer-service
-          cache-to: type=registry,ref=trieve/buildcache:puppeteer-service,mode=max
+          cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:puppeteer-service
+          cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/buildcache:puppeteer-service,mode=max
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
